@@ -54,11 +54,12 @@ def group_ids(page, shares):
 
 
 def measure(pw, variant, gids):
-    mobile = variant == "mobile"
+    mobile = variant.startswith("mobile")
     browser = pw.chromium.launch(headless=True, proxy=proxy_cfg())
     ctx = browser.new_context(user_agent=MOBILE_UA if mobile else DESKTOP_UA, locale="it-IT",
                               is_mobile=mobile, has_touch=mobile,
-                              viewport={"width": 390, "height": 844} if mobile else {"width": 1280, "height": 900})
+                              viewport={"width": 390, "height": 844} if mobile else {"width": 1280, "height": 900},
+                              java_script_enabled=variant != "mobile-nojs")
     ctx.add_cookies(load_cookies())
     ctx.route("**/*", lambda r: r.abort() if r.request.resource_type in BLOCK_TYPES else r.continue_())
     page = ctx.new_page()
@@ -99,7 +100,7 @@ def main():
         b.close()
         print("resolved:", sum(1 for g in gids if g), "/", len(gids), flush=True)
         summary = {}
-        for variant in ("desktop", "mobile"):
+        for variant in os.environ.get("FB_VARIANTS", "mobile-nojs,mobile").split(","):
             rows = [r for r in measure(pw, variant, gids) if "repeat_kb" in r]
             if rows:
                 avg = sum(r["repeat_kb"] for r in rows) / len(rows)
