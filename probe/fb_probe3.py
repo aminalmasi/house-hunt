@@ -79,9 +79,11 @@ def main():
               f"| one-time setup {setup_bytes / 1024 / 1024:.1f} MB", flush=True)
 
         # capture the feed pagination request from the first group that has one
-        captured = {}
+        captured, seen_names = {}, set()
 
         def on_req(req):
+            if "/api/graphql" in req.url and req.method == "POST":
+                seen_names.add(req.headers.get("x-fb-friendly-name", "?"))
             if "/api/graphql" in req.url and req.method == "POST" and not captured:
                 name = req.headers.get("x-fb-friendly-name", "")
                 if "Feed" in name and "Pagination" in name:
@@ -93,11 +95,17 @@ def main():
             page.goto(f"https://www.facebook.com/groups/{gid}/?sorting_setting=CHRONOLOGICAL",
                       wait_until="domcontentloaded", timeout=60000)
             page.wait_for_timeout(4000)
-            for _ in range(6):
+            path0 = urlparse(page.url).path.strip("/").split("/")[0]
+            feed = page.locator('div[role="feed"]').count()
+            for _ in range(8):
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                 page.mouse.wheel(0, 2500)
-                page.wait_for_timeout(1500)
+                page.wait_for_timeout(2000)
                 if captured:
                     break
+            print(f"diag: landed on /{path0}/ feed_divs={feed} articles={page.locator('[role=article]').count()} "
+                  f"height={page.evaluate('document.body.scrollHeight')}", flush=True)
+        print("graphql names seen:", sorted(seen_names), flush=True)
         if not captured:
             print("RESULT: no feed pagination request seen -> replay approach not possible as built")
             return
