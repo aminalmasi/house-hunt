@@ -1,0 +1,28 @@
+name: fb-probe
+
+# One-off: with the user's Facebook session, can we read each group, and how
+# many proxy bytes does one check cost? Prints counts and sizes only.
+on:
+  workflow_dispatch:
+    inputs:
+      use_proxy:
+        description: "Route through the residential proxy"
+        type: boolean
+        default: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -q playwright==1.47.0 && python -m playwright install --with-deps chromium > /dev/null
+      - name: Probe Facebook groups
+        env:
+          FB_COOKIES: ${{ secrets.FB_COOKIES }}
+          FB_GROUPS: ${{ secrets.FB_GROUPS }}
+          PROXY_URL: ${{ inputs.use_proxy && secrets.PROXY_URL || '' }}
+        run: python probe/fb_probe.py

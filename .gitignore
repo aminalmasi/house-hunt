@@ -1,3 +1,7 @@
 probe_results.json
 __pycache__/
 *.env
+area/area_map.jpeg
+area/area_debug.jpg
+profiles/
+area/*.json
