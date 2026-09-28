@@ -9,6 +9,10 @@ on:
         description: "Route through the residential proxy"
         type: boolean
         default: true
+      script:
+        description: "Probe script in probe/"
+        type: string
+        default: fb_probe2.py
 
 jobs:
   probe:
@@ -25,4 +29,5 @@ jobs:
           FB_COOKIES: ${{ secrets.FB_COOKIES }}
           FB_GROUPS: ${{ secrets.FB_GROUPS }}
           PROXY_URL: ${{ inputs.use_proxy && secrets.PROXY_URL || '' }}
-        run: python probe/fb_probe.py
+        working-directory: probe
+        run: python ${{ inputs.script }}
