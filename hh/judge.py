@@ -17,10 +17,13 @@ class Judge:
         self.dedup.add(pid, text)
         raw = self.llm(build_messages(text, self.today))
         facts = parse(raw)
-        # where the room IS decides the area; places mentioned only as "10 min from X" don't
+        # where the room IS decides the area: "in Albignasego, 10 min from Prato" is Albignasego.
+        # Only when the post names no place for the room do "near X" places count ("near the station").
         loc = (facts or {}).get("room_location")
         status, hits = self.area.locate(loc) if loc else ("unknown", [])
-        if status == "unknown" and not (facts or {}).get("nearby"):
+        if status == "unknown":
+            status, hits = self.area.locate(*(facts or {}).get("nearby", []))
+        if status == "unknown":
             status, hits = self.area.locate(text)
         out = {"id": pid, "facts": facts, "raw": None if facts else raw, "area": status, "area_hits": hits}
         out["decisions"] = {p["name"]: decide(facts, status, hits, p) for p in self.profiles}
