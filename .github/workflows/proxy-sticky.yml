@@ -1,0 +1,19 @@
+name: proxy-sticky
+
+# One-off, no Facebook: check Padova targeting and how long a sticky IP lasts.
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -q requests
+      - env:
+          PROXY_URL: ${{ secrets.PROXY_URL }}
+        run: python probe/proxy_sticky.py
