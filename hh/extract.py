@@ -92,6 +92,12 @@ class LocalLLM:
         self.torch = torch
         self.tok = AutoTokenizer.from_pretrained(path)
         from pathlib import Path
+        if not torch.cuda.is_available():  # CPU-only job: a 4B model is slow but workable for a few posts an hour
+            self.model = AutoModelForCausalLM.from_pretrained(path, dtype=torch.bfloat16)
+            self.model.eval()
+            self.max_new_tokens = max_new_tokens
+            self.name = path.rstrip("/").split("/")[-1] + "-cpu"
+            return
         gpu_gb = torch.cuda.get_device_properties(0).total_memory / 2**30
         weights_gb = sum(f.stat().st_size for f in Path(path).glob("*.safetensors")) / 2**30
         half = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
