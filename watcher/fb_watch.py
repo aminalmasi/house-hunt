@@ -5,7 +5,7 @@ Runs on GitHub Actions inside one long session (one browser, one cookie jar):
 
 What keeps it gentle (see project notes for why each matters):
   - real Google Chrome, headed (on a virtual screen), patchright, no custom user agent
-  - Italian locale and Europe/Rome timezone, matching the proxy's Veneto exit IP
+  - Italian locale and Europe/Rome timezone, matching the proxy's Padova exit IP
   - the full cookie set (c_user, xs, datr, fr, sb) so Facebook sees a known device
   - ONE page per check (the combined "your groups" feed), every ~20 min with jitter
   - nothing between 00:00 and 09:00 Rome time
@@ -59,9 +59,9 @@ def cookies():
 
 
 def proxy(session):
-    """Residential exit in Veneto (city targeting is still being tested), kept on one IP for the session id (DataImpulse sessid)."""
+    """Residential exit in Padova (DataImpulse wants the English "padua"), kept on one IP for the session id (DataImpulse sessid)."""
     u = urlparse(os.environ["PROXY_URL"])
-    login = u.username.split("__")[0] + os.environ.get("PROXY_PARAMS", "__cr.it;state.veneto") + f";sessid.{session}"
+    login = u.username.split("__")[0] + os.environ.get("PROXY_PARAMS", "__cr.it;city.padua") + f";sessid.{session}"
     return {"server": f"http://{u.hostname}:{u.port}", "username": login, "password": u.password}
 
 
@@ -182,7 +182,7 @@ def main():
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
         w = Watcher(page, args.dry)
         while time.time() < end:
-            if datetime.now(ROME).hour not in ACTIVE_HOURS:
+            if datetime.now(ROME).hour not in ACTIVE_HOURS and not args.dry:
                 time.sleep(300)
                 continue
             try:
