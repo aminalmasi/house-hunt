@@ -1,6 +1,6 @@
 """Read Facebook notification emails from the bot's Gmail inbox over IMAP.
 
-Every Facebook email is saved as-is to data/mail/<uid>.eml (not in git) so the
+Every Facebook group email is saved as-is to data/mail/<uid>.eml (not in git) so the
 parser can be checked against real messages. Only emails that link to a group
 post become posts; welcome/security emails are skipped.
 """
@@ -71,7 +71,8 @@ class Inbox:
         try:
             M.login(self.address, self.password)
             M.select('"[Gmail]/All Mail"', readonly=True)
-            typ, data = M.uid("search", None, f"UID {last + 1}:*", 'FROM "facebookmail.com"')
+            # group emails only: never read or store security codes and login alerts
+            typ, data = M.uid("search", None, f"UID {last + 1}:*", 'FROM "groupupdates@facebookmail.com"')
             uids = [int(u) for u in data[0].split() if int(u) > last]
             for uid in uids:
                 typ, msg = M.uid("fetch", str(uid), "(BODY.PEEK[])")
