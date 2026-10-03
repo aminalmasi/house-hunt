@@ -12,12 +12,12 @@ import requests
 
 u = urlparse(os.environ["PROXY_URL"])
 login = u.username.split("__")[0]
-VARIANTS = {
-    "it+sessid": "__cr.it;sessid.hh{n}",
-    "it+city.padova+sessid": "__cr.it;city.padova;sessid.hh{n}",
-    "it+ci.padova+sessid": "__cr.it;ci.padova;sessid.hh{n}",
-    "it+state.veneto+sessid": "__cr.it;state.veneto;sessid.hh{n}",
+VARIANTS = {  # a different session id per variant, so one can't inherit another's IP
+    "it+city.padua+sessid": "__cr.it;city.padua;sessid.a{n}",
+    "it+state.veneto+city.padua+sessid": "__cr.it;state.veneto;city.padua;sessid.b{n}",
+    "it+state.veneto+sessid": "__cr.it;state.veneto;sessid.c{n}",
 }
+LONG = "it+state.veneto+sessid"
 
 
 def where(params):
@@ -39,8 +39,8 @@ for name, tmpl in VARIANTS.items():
         if k < 2:
             time.sleep(60)
 # stickiness over a longer stretch, for the variant that targets Padova
-print("== long stickiness (it+city.padova+sessid), every 5 min for 40 min", flush=True)
+print(f"== long stickiness ({LONG}), every 5 min for 40 min", flush=True)
 for k in range(9):
-    print(f"  t+{k * 5:>2}min", where(VARIANTS["it+city.padova+sessid"].format(n=n + 1)), flush=True)
+    print(f"  t+{k * 5:>2}min", where(VARIANTS[LONG].format(n=n + 1)), flush=True)
     if k < 8:
         time.sleep(300)
