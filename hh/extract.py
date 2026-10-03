@@ -16,7 +16,9 @@ INSTR = """Today is {today}. Extract this JSON from the post below.
 
 {{
  "kind": "offer" | "seeking" | "other",
-   // offer = someone renting out a room/flat/bed; seeking = someone LOOKING for one ("cerco", "looking for"); other = anything else
+   // offer = someone renting out a room/flat/bed, INCLUDING flatmates looking for a new flatmate
+   //   ("cerchiamo un/una coinquilino/a", "si libera una stanza", "looking for a flatmate") = offer
+   // seeking = a person LOOKING FOR a room for themselves ("cerco stanza", "looking for a room"); other = anything else
  "units": [ {{"type": "single_room" | "double_room" | "bed_in_shared_room" | "studio" | "apartment" | "unknown",
              "rent_eur": number or null,          // monthly rent for this unit, per person
              "rent_basis": "base" | "all_inclusive" | "unknown",
@@ -89,9 +91,12 @@ class LocalLLM:
         from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModelForImageTextToText
         self.torch = torch
         self.tok = AutoTokenizer.from_pretrained(path)
-        free = torch.cuda.get_device_properties(0).total_memory / 2**30
-        kw = {"device_map": "cuda:0", "dtype": torch.bfloat16}
-        if free < 30:  # 24 GB cards: 8-bit keeps a 9-12B model comfortably inside
+        from pathlib import Path
+        gpu_gb = torch.cuda.get_device_properties(0).total_memory / 2**30
+        weights_gb = sum(f.stat().st_size for f in Path(path).glob("*.safetensors")) / 2**30
+        half = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+        kw = {"device_map": "cuda:0", "dtype": half}
+        if weights_gb + 3 > gpu_gb:  # only quantize when 16-bit weights won't fit: 8-bit is ~5x slower
             from transformers import BitsAndBytesConfig
             kw = {"device_map": "cuda:0", "quantization_config": BitsAndBytesConfig(load_in_8bit=True)}
         try:

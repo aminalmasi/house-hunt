@@ -5,3 +5,5 @@ area/area_map.jpeg
 area/area_debug.jpg
 profiles/
 area/*.json
+logs/
+data/
