@@ -161,6 +161,8 @@ class Watcher:
         self.page.wait_for_timeout(random.randint(4000, 7000))
         log(f"page: /{urlparse(self.page.url).path.strip('/')[:30]} feed={self.page.locator('div[role=feed]').count()} "
             f"login_form={self.page.locator('input[name=email]').count()}")
+        if self.page.locator("input[name=email]").count():
+            self.flagged = "logged out: Facebook shows a login form"
         if self._flag_from_url() or self.flagged:
             return None
         for _ in range(random.randint(3, 5)):  # read down the feed like a person
