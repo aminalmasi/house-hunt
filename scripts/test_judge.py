@@ -32,14 +32,15 @@ def run(model_path):
         r = judge(post["id"], post["text"])
         for p in profiles:
             name = p["name"]
-            want = expected[name][post["id"]]
+            want, _, need = expected[name][post["id"]].partition(":")
             if "duplicate_of" in r:
                 got, why = "duplicate", [f"same as {r['duplicate_of']}"]
             else:
                 got, why = r["decisions"][name]
-            ok = got == want
+            ok = got == want and (not need or any(need in w for w in why))
+            want = want + (f" + '{need}'" if need else "")
             score[name] += ok
-            print(f"{'OK ' if ok else 'XX '} {post['id']} {name}: {got:<9} (want {want:<9}) {'; '.join(why)}", flush=True)
+            print(f"{'OK ' if ok else 'XX '} {post['id']} {name}: {got:<9} (want {want:<20}) {'; '.join(why)}", flush=True)
             if not ok and "facts" in r:
                 f = r["facts"] or {}
                 print(f"      area={r['area']} {r['area_hits']} facts={json.dumps({k: f.get(k) for k in ('kind', 'units', 'available_from', 'gender', 'tenant', 'room_location', 'nearby')}, ensure_ascii=False)}")
