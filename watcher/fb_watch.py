@@ -107,13 +107,38 @@ class Watcher:
         cdp = page.context.new_cdp_session(page)
         cdp.send("Network.enable")
         cdp.on("Network.loadingFinished", lambda e: setattr(self, "wire", self.wire + e.get("encodedDataLength", 0)))
-        page.on("request", self._watch_request)
+        page.on("response", self._watch_response)
         self.seen = set(json.load(open(STATE))) if STATE.exists() else set()
 
-    def _watch_request(self, req):
-        name = req.headers.get("x-fb-friendly-name", "")
-        if "Interstitial" in name or "Checkpoint" in name:
-            self.flagged = f"bot-check request ({name})"
+    def _watch_response(self, resp):
+        """Facebook ASKS 'should this user get a bot-check screen?' on ordinary page loads too,
+        so the request alone means nothing. Read the answer: only yes/no flags and short status
+        codes are logged (public log), and only a 'yes' stops us."""
+        name = resp.request.headers.get("x-fb-friendly-name", "")
+        if not ("Interstitial" in name or "Checkpoint" in name):
+            return
+        try:
+            body = resp.text()
+            data = json.loads(body.split("\n")[0].removeprefix("for (;;);"))
+        except Exception:
+            log(f"bot-check answer ({name}): unreadable")
+            return
+        scalars = []
+
+        def walk(o, path):
+            if isinstance(o, dict):
+                for k, v in o.items():
+                    walk(v, f"{path}.{k}")
+            elif isinstance(o, list):
+                for v in o[:5]:
+                    walk(v, path + "[]")
+            elif isinstance(o, bool) or o is None or (isinstance(o, str) and re.fullmatch(r"[A-Z_]{2,40}", o)):
+                scalars.append((path, o))
+        walk(data, "")
+        log(f"bot-check answer ({name}): " + ", ".join(f"{p}={v}" for p, v in scalars[:25]))
+        risky = re.compile(r"block|interstitial|checkpoint|enforce|should_show|restricted", re.I)
+        if any((v is True and risky.search(p)) or (isinstance(v, str) and risky.search(v)) for p, v in scalars):
+            self.flagged = f"Facebook answered yes to a bot-check ({name})"
 
     def _flag_from_url(self):
         url = self.page.url
@@ -134,6 +159,8 @@ class Watcher:
         self.wire = 0
         self.page.goto(FEED, wait_until="domcontentloaded", timeout=90000)
         self.page.wait_for_timeout(random.randint(4000, 7000))
+        log(f"page: /{urlparse(self.page.url).path.strip('/')[:30]} feed={self.page.locator('div[role=feed]').count()} "
+            f"login_form={self.page.locator('input[name=email]').count()}")
         if self._flag_from_url() or self.flagged:
             return None
         for _ in range(random.randint(3, 5)):  # read down the feed like a person

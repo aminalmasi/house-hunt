@@ -65,7 +65,7 @@ jobs:
           path: state
           key: fb-seen-${{ github.run_id }}
       - name: Pause the chain
-        if: always() && steps.watch.outputs.code == '3'
+        if: always() && !inputs.dry && steps.watch.outputs.code == '3'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
