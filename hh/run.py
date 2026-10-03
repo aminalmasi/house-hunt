@@ -78,6 +78,9 @@ def main():
             chans = channels(env, profiles)
             pending = [json.loads(l) for l in open(pending_path)] if pending_path.exists() else []
             for post in inbox.fetch_new():
+                if "alert" in post:  # the Facebook reader paused itself: tell everyone, loudly
+                    pending += [{"name": p["name"], "text": "⚠️ " + post["alert"]} for p in profiles]
+                    continue
                 r = judge(post["id"], post["text"])
                 r.update({k: post[k] for k in ("text", "group", "url", "uid", "date")})
                 with open(judged_path, "a") as f:

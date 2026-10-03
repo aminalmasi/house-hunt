@@ -1,0 +1,79 @@
+name: fb-watch
+
+# One long, gentle Facebook session (see watcher/fb_watch.py), then hand over to
+# the next run. A security page from Facebook opens a "fb-paused" issue and the
+# chain stops until that issue is closed.
+on:
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: "One check only, no emails (selector test)"
+        type: boolean
+        default: false
+      minutes:
+        description: "Session length in minutes"
+        type: string
+        default: "340"
+
+concurrency:
+  group: fb-watch
+  cancel-in-progress: false
+
+permissions:
+  actions: write
+  issues: write
+  contents: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stop if paused
+        if: ${{ !inputs.dry }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          n=$(gh issue list -R "$GITHUB_REPOSITORY" --label fb-paused --state open --json number -q length)
+          if [ "$n" != "0" ]; then echo "paused by open fb-paused issue"; exit 1; fi
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -q patchright==1.63.0 && (which xvfb-run || sudo apt-get install -y -q xvfb > /dev/null)
+      - uses: actions/cache/restore@v4
+        with:
+          path: state
+          key: fb-seen-${{ github.run_id }}
+          restore-keys: fb-seen-
+      - name: Watch
+        id: watch
+        env:
+          FB_COOKIES: ${{ secrets.FB_COOKIES }}
+          PROXY_URL: ${{ secrets.PROXY_URL }}
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+        run: |
+          set +e
+          xvfb-run -a python watcher/fb_watch.py --minutes "${{ inputs.minutes || '340' }}" ${{ inputs.dry && '--dry' || '' }}
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          [ $code = 0 ] || [ $code = 3 ]
+      - uses: actions/cache/save@v4
+        if: always() && !inputs.dry
+        with:
+          path: state
+          key: fb-seen-${{ github.run_id }}
+      - name: Pause the chain
+        if: always() && steps.watch.outputs.code == '3'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create fb-paused -R "$GITHUB_REPOSITORY" --color B60205 2>/dev/null || true
+          gh issue create -R "$GITHUB_REPOSITORY" --label fb-paused --title "Facebook reader paused" \
+            --body "Facebook showed a security page. Complete any check on your phone, then close this issue to resume."
+      - name: Hand over to the next run
+        if: always() && !inputs.dry && steps.watch.outputs.code == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run fb-watch.yml -R "$GITHUB_REPOSITORY" --ref main

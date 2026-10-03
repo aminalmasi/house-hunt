@@ -5,6 +5,7 @@ parser can be checked against real messages. Only emails that link to a group
 post become posts; welcome/security emails are skipped.
 """
 import email
+import hashlib
 import imaplib
 import json
 import re
@@ -32,10 +33,22 @@ def _text(msg):
     return plain, html
 
 
+def parse_watcher(msg, subject, plain):
+    """Emails from watcher/fb_watch.py: '[hh-post] <group>' with the post as JSON, or '[hh-alert] ...'."""
+    if subject.startswith("[hh-alert]"):
+        return {"alert": plain.strip()}
+    p = json.loads(plain)
+    key = p.get("url") or "h" + hashlib.sha256(re.sub(r"\s+", " ", p["text"]).encode()).hexdigest()[:16]
+    return {"id": f"fbw:{key}", "group": p.get("group", ""), "subject": subject, "text": p["text"],
+            "url": p.get("url") or p.get("groupUrl") or "", "date": p.get("seen_at", msg.get("Date", ""))}
+
+
 def parse_email(raw):
     msg = email.message_from_bytes(raw)
     subject = str(make_header(decode_header(msg.get("Subject", ""))))
     plain, html = _text(msg)
+    if subject.startswith(("[hh-post]", "[hh-alert]")):
+        return parse_watcher(msg, subject, plain)
     links = POST_LINK.findall(unquote(unquote(plain + html)))
     if not links:
         return None
@@ -64,15 +77,16 @@ class Inbox:
             return 0
 
     def fetch_new(self):
-        """New Facebook posts since the last call. Advances the saved position only after reading."""
+        """New posts (and watcher alerts, as {"alert": text}) since the last call."""
         last = self._last_uid()
         posts = []
         M = imaplib.IMAP4_SSL("imap.gmail.com", 993)
         try:
             M.login(self.address, self.password)
             M.select('"[Gmail]/All Mail"', readonly=True)
-            # group emails only: never read or store security codes and login alerts
-            typ, data = M.uid("search", None, f"UID {last + 1}:*", 'FROM "groupupdates@facebookmail.com"')
+            # group emails and our own watcher only: never read or store security codes and login alerts
+            typ, data = M.uid("search", None, f"UID {last + 1}:*", "OR OR",
+                              'FROM "groupupdates@facebookmail.com"', 'SUBJECT "[hh-post]"', 'SUBJECT "[hh-alert]"')
             uids = [int(u) for u in data[0].split() if int(u) > last]
             for uid in uids:
                 typ, msg = M.uid("fetch", str(uid), "(BODY.PEEK[])")

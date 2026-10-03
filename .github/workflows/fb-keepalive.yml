@@ -1,0 +1,25 @@
+name: fb-keepalive
+
+# Restart the fb-watch chain if it died (runner crash, GitHub hiccup), unless paused.
+# GitHub's schedule is unreliable, so this is a backstop, not the clock.
+on:
+  # schedule:            # switched on at go-live, after the dry run passes
+  #   - cron: "23 */2 * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  issues: read
+
+jobs:
+  ensure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          paused=$(gh issue list -R "$GITHUB_REPOSITORY" --label fb-paused --state open --json number -q length)
+          live=$(gh run list -R "$GITHUB_REPOSITORY" -w fb-watch.yml --json status -q '[.[] | select(.status=="in_progress" or .status=="queued" or .status=="pending")] | length')
+          echo "paused=$paused live=$live"
+          if [ "$paused" = "0" ] && [ "$live" = "0" ]; then gh workflow run fb-watch.yml -R "$GITHUB_REPOSITORY" --ref main; fi
